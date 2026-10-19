@@ -1,0 +1,9 @@
+{
+  "name": "Left or Right",
+  "short_name": "Left or Right",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a"
+}

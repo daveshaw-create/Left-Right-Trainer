@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Left or Right">
+<meta name="theme-color" content="#0f172a">
+<link rel="manifest" href="manifest.json">
+<title>Left or Right</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --fg:#f1f5f9; --muted:#94a3b8; --accent:#38bdf8; --ok:#22c55e; --bad:#ef4444; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; -webkit-user-select:none; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg); font-family:-apple-system,system-ui,sans-serif; }
+  main { max-width:900px; margin:0 auto; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; gap:20px; text-align:center; }
+  h1 { font-size:2.4rem; margin:0; }
+  p { color:var(--muted); font-size:1.2rem; margin:0; max-width:36em; }
+  .card { background:var(--card); border-radius:24px; padding:24px; }
+  button { font:inherit; font-size:1.4rem; font-weight:600; border:0; border-radius:18px; padding:18px 36px; background:var(--accent); color:#06283d; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--muted); border:2px solid #334155; }
+  label { font-size:1.15rem; color:var(--muted); display:flex; gap:10px; align-items:center; justify-content:center; }
+  select,input[type=number] { font:inherit; font-size:1.15rem; padding:8px 12px; border-radius:10px; border:2px solid #334155; background:var(--card); color:var(--fg); }
+  .opts { display:grid; gap:14px; }
+  #stage { width:min(60vh,520px); height:min(60vh,520px); display:flex; align-items:center; justify-content:center; background:#e2e8f0; border-radius:28px; transition:background .15s; }
+  #stage.ok { background:#bbf7d0; } #stage.bad { background:#fecaca; }
+  #stage svg { width:80%; height:80%; }
+  .answers { display:flex; gap:24px; width:min(90vw,700px); }
+  .answers button { flex:1; font-size:2.2rem; padding:30px 0; }
+  #btnL { background:#a78bfa; } #btnR { background:#fbbf24; }
+  #hud { color:var(--muted); font-size:1.2rem; }
+  table { border-collapse:collapse; font-size:1.2rem; margin:auto; } td,th { padding:6px 16px; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<main id="start">
+  <h1>Left or Right?</h1>
+  <p>A picture of a hand or foot will appear, sometimes turned around. Tap <b>Left</b> or <b>Right</b> for which one it is. Take your time, and try to picture moving your own hand or foot into that position.</p>
+  <div class="card opts">
+    <label>Body part
+      <select id="optPart"><option value="both">Hands &amp; feet</option><option value="hand">Hands only</option><option value="foot">Feet only</option></select>
+    </label>
+    <label>Rotations
+      <select id="optRot"><option value="0">Upright only (easier)</option><option value="90">Upright + sideways</option><option value="360" selected>All directions</option></select>
+    </label>
+    <label>Pictures <input type="number" id="optN" value="20" min="4" max="100" step="2" style="width:5em"></label>
+  </div>
+  <button id="go">Start</button>
+  <p style="font-size:.95rem">No names or personal information are collected or stored.</p>
+</main>
+
+<main id="play" class="hidden">
+  <div id="hud"></div>
+  <div id="stage"></div>
+  <div class="answers"><button id="btnL">Left</button><button id="btnR">Right</button></div>
+</main>
+
+<main id="done" class="hidden">
+  <h1>All done</h1>
+  <div class="card"><div id="summary"></div></div>
+  <div style="display:flex;gap:16px"><button id="again">Go again</button><button id="csv" class="ghost">Save results (CSV)</button></div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const SKIN = '#e8b38e', SKIN_D = '#c98f6a', LINE = '#7a4a2e';
+
+// ---- Drawing: base is a RIGHT limb seen from the back/top (thumb/big toe on the viewer's left).
+function rr(x,y,w,h,r,extra=''){ return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${SKIN}" stroke="${LINE}" stroke-width="3" ${extra}/>`; }
+function handSvg(view){
+  let s = rr(60,120,100,100,26);                         // palm
+  [[62,40,22,90],[88,22,22,108],[114,32,22,98],[138,56,20,76]].forEach(f=>{ s += rr(f[0],f[1],f[2],f[3],11); });  // fingers
+  s += rr(18,128,26,80,13,'transform="rotate(-38 31 168)"');                                                     // thumb (left)
+  s += rr(52,206,116,30,10);                                                                                      // wrist
+  if(view==='back'){ // nails
+    [[66,44,14],[92,26,14],[118,36,14],[142,60,12]].forEach(n=>{ s += `<rect x="${n[0]}" y="${n[1]}" width="${n[2]}" height="16" rx="6" fill="#f7d9c4" stroke="${LINE}" stroke-width="2"/>`; });
+    s += `<rect x="12" y="132" width="14" height="14" rx="5" fill="#f7d9c4" stroke="${LINE}" stroke-width="2" transform="rotate(-38 19 139)"/>`;
+  } else {           // palm creases
+    s += `<path d="M70 150 Q110 165 150 145 M70 175 Q110 190 150 172" fill="none" stroke="${SKIN_D}" stroke-width="4" stroke-linecap="round"/>`;
+  }
+  return s;
+}
+function footSvg(view){
+  let s = `<path d="M70 70 C60 110 60 170 78 215 C92 245 140 245 150 210 C160 170 160 110 140 70 C125 40 85 40 70 70Z" fill="${SKIN}" stroke="${LINE}" stroke-width="3"/>`;
+  const toes=[[48,38,34],[82,22,22],[104,18,20],[124,24,18],[142,40,15]]; // big toe on left
+  toes.forEach(t=>{ s += `<ellipse cx="${t[0]+t[2]/2}" cy="${t[1]+t[2]/2}" rx="${t[2]/2+3}" ry="${t[2]/2+4}" fill="${SKIN}" stroke="${LINE}" stroke-width="3"/>`; });
+  if(view==='back'){
+    s += `<ellipse cx="65" cy="52" rx="10" ry="9" fill="#f7d9c4" stroke="${LINE}" stroke-width="2"/>`;
+    [[93,32],[114,28],[133,34],[149,48]].forEach(t=>{ s += `<ellipse cx="${t[0]}" cy="${t[1]}" rx="6" ry="5" fill="#f7d9c4" stroke="${LINE}" stroke-width="2"/>`; });
+  } else {
+    s += `<path d="M85 120 Q75 170 95 200 M130 130 Q140 170 125 200" fill="none" stroke="${SKIN_D}" stroke-width="4" stroke-linecap="round"/>`;
+  }
+  return s;
+}
+// Right + back => thumb on viewer's left (no flip). Left + back, or Right + palm/sole => flipped.
+function render(t){
+  const flip = (t.side === 'right') !== (t.view === 'back');
+  const body = (t.part==='hand'? handSvg(t.view) : footSvg(t.view));
+  return `<svg viewBox="0 0 200 260"><g transform="rotate(${t.rot} 100 130)"><g transform="${flip?'translate(200 0) scale(-1 1)':''}">${body}</g></g></svg>`;
+}
+
+// ---- Session logic
+let trials=[], i=0, t0=0, locked=false;
+const shuffle = a => { for(let k=a.length-1;k>0;k--){ const j=Math.floor(Math.random()*(k+1)); [a[k],a[j]]=[a[j],a[k]]; } return a; };
+
+function build(){
+  const part=$('optPart').value, rotOpt=$('optRot').value, n=Math.max(4,Math.min(100,+$('optN').value||20));
+  const parts = part==='both'?['hand','foot']:[part];
+  const rots = rotOpt==='0'?[0]: rotOpt==='90'?[0,90,270]:[0,90,180,270];
+  const out=[];
+  for(let k=0;k<n;k++) out.push({part:parts[k%parts.length], side:k%2?'left':'right', view:Math.random()<.5?'back':'palm', rot:rots[Math.floor(Math.random()*rots.length)]});
+  return shuffle(out);
+}
+function show(v){ ['start','play','done'].forEach(x=>$(x).classList.toggle('hidden',x!==v)); }
+function next(){
+  if(i>=trials.length) return finish();
+  const t=trials[i]; $('stage').className=''; $('stage').innerHTML=render(t);
+  $('hud').textContent=`${i+1} of ${trials.length}`; locked=false; t0=performance.now();
+}
+function answer(side){
+  if(locked) return; locked=true;
+  const t=trials[i]; t.rt=Math.round(performance.now()-t0); t.answer=side; t.correct=side===t.side;
+  $('stage').className=t.correct?'ok':'bad';
+  setTimeout(()=>{ i++; next(); }, t.correct?450:1100);
+}
+function finish(){
+  const ok=trials.filter(t=>t.correct), avg=a=>a.length?Math.round(a.reduce((s,t)=>s+t.rt,0)/a.length)/1000:0;
+  let rows=''; [0,90,180,270].forEach(r=>{ const g=trials.filter(t=>t.rot===r); if(g.length) rows+=`<tr><td>${r}°</td><td>${g.filter(t=>t.correct).length}/${g.length}</td><td>${avg(g.filter(t=>t.correct)).toFixed(1)} s</td></tr>`; });
+  $('summary').innerHTML=`<p style="color:var(--fg);font-size:1.8rem;margin-bottom:12px"><b>${ok.length} of ${trials.length}</b> correct (${Math.round(100*ok.length/trials.length)}%)</p><p style="margin-bottom:12px">Average time for correct answers: ${avg(ok).toFixed(1)} s</p><table><tr><th>Rotation</th><th>Correct</th><th>Avg time</th></tr>${rows}</table>`;
+  show('done');
+}
+function csv(){
+  const lines=['trial,part,side,view,rotation,answer,correct,rt_ms',...trials.map((t,k)=>[k+1,t.part,t.side,t.view,t.rot,t.answer,t.correct,t.rt].join(','))];
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/csv'}));
+  a.download='left-right-results.csv'; a.click();
+}
+$('go').onclick=()=>{ trials=build(); i=0; show('play'); next(); };
+$('btnL').onclick=()=>answer('left'); $('btnR').onclick=()=>answer('right');
+$('again').onclick=()=>show('start'); $('csv').onclick=csv;
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
